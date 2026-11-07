@@ -1,11 +1,11 @@
-//! A tiny fake Buzz relay for exercising the TUI by hand or from a script.
+//! A tiny fake Buzz relay for exercising any Buzz client by hand or from a script.
 //!
 //!   cargo run -- 127.0.0.1:7447
 //!
-//! It issues the NIP-42 challenge, accepts any AUTH, serves a fixed set of
-//! NIP-29 channels and legacy hidden DM rooms, and answers REQs from that
-//! store. Activity times are chosen so channels and DMs interleave when
-//! ordered by recency, which is what the store sorts by.
+//! It issues the NIP-42 challenge, accepts any AUTH and any EVENT, serves a
+//! fixed set of NIP-29 channels and legacy hidden DM rooms, and answers REQs
+//! from that store. Newest-message times are chosen so channels and DMs
+//! interleave when ordered by recent activity.
 use futures_util::{SinkExt, StreamExt};
 use nostr::prelude::*;
 use std::sync::Arc;

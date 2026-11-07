@@ -126,7 +126,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "buzz-tui-fake-relay"
+name = "buzz-fake-relay"
 version = "0.1.0"
 dependencies = [
  "futures-util",

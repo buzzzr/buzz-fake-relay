@@ -6,6 +6,11 @@
 //! fixed set of NIP-29 channels and legacy hidden DM rooms, and answers REQs
 //! from that store. Newest-message times are chosen so channels and DMs
 //! interleave when ordered by recent activity.
+//!
+//! With `--script FILE [ADDR]` it instead serves a scripted community over HTTP `/query` and `/events` plus a WebSocket that pushes
+//! accepted writes (see `scripted.rs`), for clients like `buzzr`.
+mod scripted;
+
 use futures_util::{SinkExt, StreamExt};
 use nostr::prelude::*;
 use std::sync::Arc;
@@ -81,9 +86,21 @@ fn seed() -> Vec<Event> {
 
 #[tokio::main]
 async fn main() {
-    let addr = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "127.0.0.1:7447".into());
+    let mut args = std::env::args().skip(1);
+    let first = args.next();
+    if first.as_deref() == Some("--script") {
+        let Some(file) = args.next() else {
+            eprintln!("usage: buzz-fake-relay --script FILE [ADDR]");
+            std::process::exit(2);
+        };
+        let addr = args.next().unwrap_or_else(|| "127.0.0.1:8787".into());
+        if let Err(e) = scripted::run(&file, &addr).await {
+            eprintln!("error: {e}");
+            std::process::exit(1);
+        }
+        return;
+    }
+    let addr = first.unwrap_or_else(|| "127.0.0.1:7447".into());
     let store = Arc::new(seed());
     let listener = TcpListener::bind(&addr).await.unwrap();
     eprintln!("fake relay on ws://{addr} with {} events", store.len());

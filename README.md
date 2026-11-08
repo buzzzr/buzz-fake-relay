@@ -2,13 +2,29 @@
 
 A tiny fake [Buzz](https://github.com/block/buzz) relay for exercising a Buzz client by hand or from a script. Not a real relay: it
 issues the NIP-42 challenge, accepts any AUTH and any EVENT, serves a fixed NIP-29 data set, and answers REQs from it. Nothing is
-persisted and live events are not pushed.
+persisted and live events are not pushed (default mode; see "Scripted mode" for HTTP clients and live echo).
 
 ```bash
 cargo run -- 127.0.0.1:7447          # default address
 ```
 
-## Seed data
+## Scripted mode (HTTP clients such as buzzr)
+
+```bash
+cargo run -- --script data/community.json [127.0.0.1:8787]
+```
+
+Serves a community from a JSON script (users, channels, messages, threads, reactions) instead of the fixed seed, over the endpoints
+clients that read via HTTP use: `POST /query`, `POST /events`, `GET /` (NIP-11), plus a WebSocket on the same port. Accepted writes are
+echoed to live subscribers, so sending, editing and deleting from a client behave normally. Ids are not real hashes and no signature is
+checked; nothing is persisted. Edit `data/community.json` or pass your own script. Point the client at `http://127.0.0.1:8787` (or
+`ws://`), any private key. For [buzzr](https://github.com/vthub/buzzr):
+
+```bash
+BUZZR_CONFIG_DIR=$(mktemp -d) BUZZ_RELAY_URL=http://127.0.0.1:8787 BUZZ_PRIVATE_KEY=<any hex> buzzr
+```
+
+## Seed data (default mode)
 
 - Channels `general`, `random`, `design`, `ops`, `dev`.
 - Three legacy hidden DM rooms (peers `bob`, `alice`, `carol`).

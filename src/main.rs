@@ -34,15 +34,20 @@ fn sign(k: &Keys, kind: u16, content: &str, at: u64, tags: Vec<Vec<&str>>) -> Ev
 
 fn seed() -> Vec<Event> {
     let relay = keys(1);
-    let people = [(2u8, "alice"), (3, "bob"), (4, "carol")];
+    // (seed, name, about)
+    let people = [
+        (2u8, "alice", "Design. I sail at the weekend."),
+        (3, "bob", "Backend. Ask me about the relay."),
+        (4, "carol", "Ops. I keep the lights on."),
+    ];
     let now = Timestamp::now().as_secs();
     let mut out = Vec::new();
-    for (s, name) in people {
+    for (s, name, about) in people {
         let k = keys(s);
         out.push(sign(
             &k,
             0,
-            &format!(r#"{{"name":"{name}"}}"#),
+            &format!(r#"{{"name":"{name}","about":"{about}"}}"#),
             now - 9000,
             vec![],
         ));

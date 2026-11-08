@@ -1,0 +1,130 @@
+{
+  "relay": { "name": "Orbit Demo Relay" },
+  "users": [
+    { "key": "mira",   "name": "mira" },
+    { "key": "tobias", "name": "tobias" },
+    { "key": "jun",    "name": "jun" },
+    { "key": "priya",  "name": "priya" },
+    { "key": "sam",    "name": "sam" },
+    { "key": "relayer","name": "relayer" }
+  ],
+  "channels": [
+    {
+      "id": "3f1c0a52-0000-4000-8000-000000000001",
+      "name": "general",
+      "about": "Everything that does not have a home yet.",
+      "created_at": 1793900000,
+      "members": [
+        { "user": "mira", "role": "owner" },
+        { "user": "tobias", "role": "member" },
+        { "user": "jun", "role": "member" },
+        { "user": "priya", "role": "member" },
+        { "user": "relayer", "role": "bot" }
+      ],
+      "messages": [
+        {
+          "id": "aaaa000000000000000000000000000000000000000000000000000000000001",
+          "from": "mira", "at": 1793990000,
+          "text": "Morning all — the **0.4 release** is tagged. Thanks for the long week. 🎉",
+          "reactions": { "🎉": ["tobias", "jun", "priya"], "🚀": ["tobias"] },
+          "replies": [
+            { "id": "bbbb000000000000000000000000000000000000000000000000000000000001", "from": "tobias", "at": 1793990400, "text": "Shipping it was the easy part. The docs are next.", "reactions": { "😄": ["mira"] } },
+            { "id": "bbbb000000000000000000000000000000000000000000000000000000000002", "from": "jun", "at": 1793990900, "text": "I will take the changelog if nobody has it." }
+          ]
+        },
+        {
+          "id": "aaaa000000000000000000000000000000000000000000000000000000000002",
+          "from": "priya", "at": 1793997200,
+          "text": "Reminder: standup moves to 10:00 from Monday. It is in the calendar already.",
+          "reactions": { "👍": ["mira", "tobias", "jun", "sam"] }
+        },
+        {
+          "id": "aaaa000000000000000000000000000000000000000000000000000000000003",
+          "from": "tobias", "at": 1794001000,
+          "text": "Does anyone still use the `--legacy` flag? I would like to delete it before it ossifies.",
+          "replies": [
+            { "id": "bbbb000000000000000000000000000000000000000000000000000000000003", "from": "mira", "at": 1794001500, "text": "Grep the logs first, but I am fine removing it." },
+            { "id": "bbbb000000000000000000000000000000000000000000000000000000000004", "from": "sam", "at": 1794002100, "text": "One customer pinned it in a script. I will ping them." }
+          ]
+        },
+        {
+          "id": "aaaa000000000000000000000000000000000000000000000000000000000004",
+          "from": "relayer", "at": 1794005000,
+          "text": "Weekly digest: 42 messages, 3 threads, 0 incidents. Backup verified at 03:00."
+        },
+        {
+          "id": "aaaa000000000000000000000000000000000000000000000000000000000005",
+          "from": "jun", "at": 1794008000,
+          "text": "The search index rebuilt cleanly this time. Turns out it was the timezone, as usual.",
+          "reactions": { "😅": ["mira", "tobias"] }
+        }
+      ]
+    },
+    {
+      "id": "3f1c0a52-0000-4000-8000-000000000002",
+      "name": "engineering",
+      "about": "Design notes, reviews, and the occasional yak shave.",
+      "created_at": 1793900100,
+      "members": [
+        { "user": "mira", "role": "owner" },
+        { "user": "tobias", "role": "member" },
+        { "user": "jun", "role": "member" }
+      ],
+      "messages": [
+        {
+          "id": "cccc000000000000000000000000000000000000000000000000000000000001",
+          "from": "jun", "at": 1794003000,
+          "text": "Proposal: move the retry loop out of the client and let the relay hand back a `Retry-After`. Fewer timers to reason about.",
+          "replies": [
+            { "id": "dddd000000000000000000000000000000000000000000000000000000000001", "from": "tobias", "at": 1794003400, "text": "That assumes every relay implements it. Ours would, but the spec is optional." }
+          ]
+        },
+        {
+          "id": "cccc000000000000000000000000000000000000000000000000000000000002",
+          "from": "mira", "at": 1794006000,
+          "text": "Reviewed PR #214 — one nit about naming, otherwise good to merge."
+        }
+      ]
+    },
+    {
+      "id": "3f1c0a52-0000-4000-8000-000000000003",
+      "name": "design",
+      "about": "Screens, tokens, and the space between them.",
+      "created_at": 1793900200,
+      "members": [ { "user": "priya", "role": "owner" }, { "user": "mira", "role": "member" } ],
+      "messages": [
+        { "id": "eeee000000000000000000000000000000000000000000000000000000000001", "from": "priya", "at": 1794004000, "text": "New empty states are in Figma. They read better at 12pt than I expected." }
+      ]
+    },
+    {
+      "id": "3f1c0a52-0000-4000-8000-000000000004",
+      "name": "release-notes",
+      "about": "What changed, and when.",
+      "created_at": 1793900300,
+      "members": [ { "user": "relayer", "role": "bot" }, { "user": "mira", "role": "owner" } ],
+      "messages": [
+        { "id": "ffff000000000000000000000000000000000000000000000000000000000001", "from": "relayer", "at": 1793999000, "text": "**0.4.0** — offline queue, faster search, and a fix for duplicate mentions." }
+      ]
+    },
+    {
+      "id": "3f1c0a52-0000-4000-8000-000000000005",
+      "name": "ops",
+      "about": "Deploys, alerts, and the on-call handover.",
+      "created_at": 1793900400,
+      "members": [ { "user": "sam", "role": "owner" }, { "user": "mira", "role": "member" } ],
+      "messages": [
+        { "id": "1111000000000000000000000000000000000000000000000000000000000001", "from": "sam", "at": 1794007000, "text": "Handover: nothing on fire. The staging box still needs a disk prune." }
+      ]
+    },
+    {
+      "id": "3f1c0a52-0000-4000-8000-000000000006",
+      "name": "random",
+      "about": "Off-topic by design.",
+      "created_at": 1793900500,
+      "members": [ { "user": "tobias", "role": "owner" }, { "user": "jun", "role": "member" } ],
+      "messages": [
+        { "id": "2222000000000000000000000000000000000000000000000000000000000001", "from": "tobias", "at": 1794002000, "text": "The office plant has been named. It is now `daemon`.", "reactions": { "🌱": ["jun"] } }
+      ]
+    }
+  ]
+}

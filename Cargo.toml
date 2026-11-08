@@ -5,7 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
+serde_json = "1"
 tokio-tungstenite = "0.30"
 futures-util = { version = "0.3", default-features = false, features = ["std", "sink"] }
 nostr = { version = "0.45", default-features = false, features = ["std", "rand", "os-rng"] }

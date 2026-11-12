@@ -89,6 +89,13 @@ fn seed() -> Vec<Event> {
             vec![vec!["h", id]],
         ));
     }
+    // `random` is the one open channel with a roster: the relay names its members, so a client that is neither of them can
+    // tell it is on a channel it is not in. The other open channels carry no roster, which is what a relay that does not
+    // publish a group's members leaves a client with.
+    let members: Vec<String> = [keys(2), keys(3)].iter().map(|k| k.public_key().to_hex()).collect();
+    let mut random = vec![vec!["d", "c-random"]];
+    random.extend(members.iter().map(|p| vec!["p", p.as_str(), "member"]));
+    out.push(sign(&relay, 39002, "", now - 9000, random));
     // A short thread in `general`: the message above plus two replies, so a client can exercise opening a thread.
     if let Some(root) = out
         .iter()

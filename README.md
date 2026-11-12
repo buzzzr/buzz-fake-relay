@@ -24,6 +24,7 @@ each connection (a WebSocket upgrade carries `Sec-WebSocket-Key`; anything else 
 - Channels `general`, `random`, `design`, `ops`, `dev`.
 - Three legacy hidden DM rooms (peers `bob`, `alice`, `carol`).
 - Profiles (kind 0) for the three peers, and one message per room.
+- Profiles (kind 0) for the three peers, each with a name and an about line, and one message per room.
 - A short thread in `general`: its message plus two replies, so a client can exercise opening a thread.
 
 Newest-message times are chosen so channels and DMs interleave when ordered by recent activity, which is what clients that sort by

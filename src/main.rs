@@ -3,19 +3,22 @@
 //!   cargo run -- 127.0.0.1:7447
 //!
 //! It speaks both halves of the relay's surface on one port:
-//!   * WebSocket — NIP-42 challenge, any AUTH -> OK, any EVENT -> OK, REQ -> EOSE
-//!     answered from the fixed store (NIP-29 groups over WebSocket);
-//!   * HTTP — `GET /` (NIP-11 info), `POST /query` (the same store filtered by
-//!     the request's Nostr filters, NIP-98 header ignored) and `POST /events`
+//!   * WebSocket — NIP-42 challenge, any AUTH -> OK, a verified EVENT -> OK and
+//!     into the store, REQ -> EOSE answered from the store (NIP-29 groups over
+//!     WebSocket);
+//!   * HTTP — `GET /` (NIP-11 info), `POST /query` (the store filtered by the
+//!     request's Nostr filters, NIP-98 header ignored) and `POST /events`
 //!     (`{"accepted":true,...}`), which is how the `buzz` CLI and clients built
 //!     on it read history and send.
 //! Both are served from a fixed set of NIP-29 channels and legacy hidden DM
-//! rooms. Newest-message times are chosen so channels and DMs interleave when
-//! ordered by recent activity. Nothing is persisted and live events are not
-//! pushed.
+//! rooms, seeded at startup. Newest-message times are chosen so channels and DMs
+//! interleave when ordered by recent activity. An event a client sends is
+//! checked (id and signature) and added to the store, so a query reads back what
+//! was published; live events are still not pushed to open subscriptions.
 use futures_util::{SinkExt, StreamExt};
 use nostr::prelude::*;
-use std::sync::Arc;
+use serde_json::json;
+use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::Message as Ws;
@@ -113,11 +116,11 @@ async fn main() {
     let addr = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "127.0.0.1:7447".into());
-    let store = Arc::new(seed());
+    let store = Arc::new(Mutex::new(seed()));
     let listener = TcpListener::bind(&addr).await.unwrap();
     eprintln!(
         "fake relay on http://{addr} and ws://{addr} with {} events",
-        store.len()
+        store.lock().unwrap().len()
     );
     loop {
         let (stream, _) = listener.accept().await.unwrap();
@@ -133,17 +136,17 @@ async fn main() {
             };
             let probe = String::from_utf8_lossy(&head[..n]).to_ascii_lowercase();
             if probe.contains("sec-websocket-key") {
-                ws_session(stream, &store).await;
+                ws_session(stream, store).await;
             } else {
-                http_session(stream, &store).await;
+                http_session(stream, store).await;
             }
         });
     }
 }
 
-/// One WebSocket client: NIP-42 challenge, AUTH -> OK, EVENT -> OK, REQ -> the
-/// store, then EOSE. Nothing is persisted and live events are not pushed.
-async fn ws_session(stream: TcpStream, store: &[Event]) {
+/// One WebSocket client: NIP-42 challenge, AUTH -> OK, an EVENT that verifies ->
+/// OK and into the store, REQ -> the store, then EOSE. Live events are not pushed.
+async fn ws_session(stream: TcpStream, store: Arc<Mutex<Vec<Event>>>) {
     let Ok(ws) = tokio_tungstenite::accept_async(stream).await else {
         return;
     };
@@ -163,8 +166,14 @@ async fn ws_session(stream: TcpStream, store: &[Event]) {
                     .await;
             }
             ClientMessage::Event(e) => {
+                let e = e.into_owned();
+                let id = e.id;
+                let (status, why) = match save(&store, e) {
+                    Ok(()) => (true, String::new()),
+                    Err(why) => (false, why),
+                };
                 let _ = tx
-                    .send(Ws::text(RelayMessage::ok(e.id, true, "").as_json()))
+                    .send(Ws::text(RelayMessage::ok(id, status, why).as_json()))
                     .await;
             }
             ClientMessage::Req {
@@ -172,7 +181,13 @@ async fn ws_session(stream: TcpStream, store: &[Event]) {
                 filters,
             } => {
                 let filters: Vec<Filter> = filters.into_iter().map(|f| f.into_owned()).collect();
-                for e in query(&filters, store) {
+                // Read the store, then let the lock go: the sends below await, and a lock held across them would
+                // block every other connection.
+                let hits = {
+                    let events = store.lock().unwrap();
+                    query(&filters, &events)
+                };
+                for e in hits {
                     let m = RelayMessage::event(subscription_id.clone().into_owned(), e);
                     let _ = tx.send(Ws::text(m.as_json())).await;
                 }
@@ -187,7 +202,7 @@ async fn ws_session(stream: TcpStream, store: &[Event]) {
 /// One plain HTTP request, the surface the `buzz` CLI and clients built on it
 /// use: `GET /` (NIP-11), `POST /query` and `POST /events`. NIP-98 headers are
 /// ignored, like the WebSocket AUTH.
-async fn http_session(mut stream: TcpStream, store: &[Event]) {
+async fn http_session(mut stream: TcpStream, store: Arc<Mutex<Vec<Event>>>) {
     let mut buf: Vec<u8> = Vec::new();
     let mut chunk = [0u8; 4096];
     let head_end = loop {
@@ -232,10 +247,22 @@ async fn http_session(mut stream: TcpStream, store: &[Event]) {
     let (status, kind, payload) = match (method, path) {
         ("GET", "/") => ("200 OK", "application/nostr+json", nip11()),
         ("POST", "/query") => match filters_of(&body) {
-            Some(filters) => ("200 OK", "application/json", events_json(&query(&filters, store))),
-            None => ("400 Bad Request", "application/json", r#"{"message":"the body must be a JSON array of filters"}"#.to_owned()),
+            Some(filters) => {
+                let events = store.lock().unwrap();
+                ("200 OK", "application/json", events_json(&query(&filters, &events)))
+            }
+            None => ("400 Bad Request", "application/json", json!({ "message": "the body must be a JSON array of filters" }).to_string()),
         },
-        ("POST", "/events") => ("200 OK", "application/json", accepted(&body)),
+        ("POST", "/events") => match Event::from_json(&body) {
+            Ok(event) => {
+                let id = event.id.to_hex();
+                match save(&store, event) {
+                    Ok(()) => ("200 OK", "application/json", accepted(&id)),
+                    Err(why) => ("400 Bad Request", "application/json", refused(&why)),
+                }
+            }
+            Err(e) => ("400 Bad Request", "application/json", refused(&format!("the body is not a Nostr event: {e}"))),
+        },
         _ => ("404 Not Found", "text/plain", "not found".to_owned()),
     };
     let head = format!(
@@ -285,10 +312,26 @@ fn events_json(events: &[Event]) -> String {
     out
 }
 
-/// The answer `POST /events` gives: accepted, like the WebSocket `OK`.
-fn accepted(body: &[u8]) -> String {
-    let id = Event::from_json(body).map(|e| e.id.to_hex()).unwrap_or_default();
-    format!(r#"{{"accepted":true,"event_id":"{id}"}}"#)
+/// Take a client's event: check its id and signature, then keep it. An event sent again (the same id) replaces the copy
+/// already held; a replaceable kind is not superseded — this is a test relay, not a real store.
+fn save(store: &Mutex<Vec<Event>>, event: Event) -> Result<(), String> {
+    event.verify().map_err(|e| format!("the event does not verify: {e}"))?;
+    let mut events = store.lock().unwrap();
+    match events.iter_mut().find(|e| e.id == event.id) {
+        Some(held) => *held = event,
+        None => events.push(event),
+    }
+    Ok(())
+}
+
+/// The answer `POST /events` gives an event it took: accepted, like the WebSocket `OK`.
+fn accepted(id: &str) -> String {
+    json!({ "accepted": true, "event_id": id }).to_string()
+}
+
+/// The answer `POST /events` gives an event it will not keep: the same shape, refused, like the WebSocket `OK false`.
+fn refused(why: &str) -> String {
+    json!({ "accepted": false, "message": why }).to_string()
 }
 
 fn nip11() -> String {
@@ -297,4 +340,45 @@ fn nip11() -> String {
 
 fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
     hay.windows(needle.len()).position(|w| w == needle)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A signed event of `kind`, as a client would send one.
+    fn signed(kind: u16, content: &str) -> Event {
+        EventBuilder::new(Kind::from_u16(kind), content).finalize(&keys(9)).unwrap()
+    }
+
+    #[test]
+    fn a_published_event_is_kept_and_queried_back() {
+        let store = Mutex::new(Vec::new());
+        let event = signed(0, r#"{"name":"Scout"}"#);
+        save(&store, event.clone()).unwrap();
+        let filter = Filter::new().kind(Kind::from_u16(0)).author(event.pubkey);
+        let hits = query(&[filter], &store.lock().unwrap());
+        assert_eq!(hits.len(), 1, "the store holds just the event that was sent");
+        assert_eq!(hits[0].id, event.id, "and it is the same event that comes back out");
+    }
+
+    #[test]
+    fn an_event_that_does_not_verify_is_refused_and_not_kept() {
+        let store = Mutex::new(Vec::new());
+        let mut event = signed(0, r#"{"name":"Scout"}"#);
+        event.content = r#"{"name":"Someone else"}"#.to_owned(); // the id and signature no longer match
+        assert!(save(&store, event).is_err());
+        assert!(store.lock().unwrap().is_empty(), "a refused event is not kept");
+    }
+
+    #[test]
+    fn the_seed_gives_one_open_channel_a_roster() {
+        let has_roster = |id: &str| {
+            seed().iter().any(|e| {
+                e.kind.as_u16() == 39002 && e.tags.iter().any(|t| t.kind() == "d" && t.content() == Some(id))
+            })
+        };
+        assert!(has_roster("c-random"), "an open channel names its members, so a client can tell it is not in it");
+        assert!(!has_roster("c-general"), "the others carry no roster, as a relay that does not publish members leaves them");
+    }
 }

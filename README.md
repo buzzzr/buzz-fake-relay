@@ -1,8 +1,9 @@
 # buzz-fake-relay
 
 A tiny fake [Buzz](https://github.com/block/buzz) relay for exercising a Buzz client by hand or from a script. Not a real relay: it
-issues the NIP-42 challenge, accepts any AUTH and any EVENT, serves a fixed NIP-29 data set, and answers REQs from it. Nothing is
-persisted and live events are not pushed.
+issues the NIP-42 challenge, accepts any AUTH, keeps a verified EVENT, serves a fixed NIP-29 data set seeded at startup, and
+answers REQs from it. Events a client sends are checked (id and signature) and added to the store, so a query reads back what
+was published; live events are not pushed.
 
 ```bash
 cargo run -- 127.0.0.1:7447          # default address
@@ -13,9 +14,10 @@ cargo run -- 127.0.0.1:7447          # default address
 Both halves of the relay's surface are served on the one port, chosen by looking at the first bytes of
 each connection (a WebSocket upgrade carries `Sec-WebSocket-Key`; anything else is plain HTTP):
 
-- **WebSocket** — NIP-42 challenge, any AUTH → `OK`, any EVENT → `OK`, `REQ` → the store, then `EOSE`.
+- **WebSocket** — NIP-42 challenge, any AUTH → `OK`, a verified EVENT → `OK` and into the store, `REQ` → the store, then `EOSE`.
 - **HTTP** — `GET /` (the NIP-11 document), `POST /query` (the same store filtered by the request's
-  Nostr filters, as a JSON array) and `POST /events` (`{"accepted":true,...}`). NIP-98 headers are
+  Nostr filters, as a JSON array) and `POST /events` (`{"accepted":true,...}` for an event whose id and
+  signature check out, `{"accepted":false,...}` for one that does not). NIP-98 headers are
   ignored, like the WebSocket AUTH. This is the surface the `buzz` CLI and clients built on it read
   history and send on.
 

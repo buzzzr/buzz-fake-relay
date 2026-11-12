@@ -42,6 +42,10 @@ fn seed() -> Vec<Event> {
         (2u8, "alice", "Design. I sail at the weekend."),
         (3, "bob", "Backend. Ask me about the relay."),
         (4, "carol", "Ops. I keep the lights on."),
+        // In no room and in no message: a client that only learns names from what it has loaded never meets him, so a
+        // lookup in the relay's directory is the only way to find him (and the only case that needs one). Seed 6, not 5:
+        // the end-to-end suite signs in as `0505…`, so a fifth peer would be the client's own identity.
+        (6, "dave", "Docs. I write things down."),
     ];
     let now = Timestamp::now().as_secs();
     let mut out = Vec::new();
@@ -380,5 +384,21 @@ mod tests {
         };
         assert!(has_roster("c-random"), "an open channel names its members, so a client can tell it is not in it");
         assert!(!has_roster("c-general"), "the others carry no roster, as a relay that does not publish members leaves them");
+    }
+
+    /// One seeded person is in no room and wrote nothing, so a name lookup in the directory is the only way a client can
+    /// find him: the case a client's own name table cannot answer. His profile is the only event that names him.
+    #[test]
+    fn the_seed_has_one_person_no_room_names() {
+        let seeded = seed();
+        let dave = keys(6).public_key().to_hex();
+        let profiles: Vec<&Event> = seeded.iter().filter(|e| e.kind.as_u16() == 0 && e.pubkey.to_hex() == dave).collect();
+        assert_eq!(profiles.len(), 1, "the directory holds one profile for him");
+        assert!(profiles[0].content.contains("\"name\":\"dave\""), "under the name a lookup asks for");
+        let named = seeded
+            .iter()
+            .filter(|e| e.pubkey.to_hex() == dave || e.tags.iter().any(|t| t.content() == Some(dave.as_str())))
+            .count();
+        assert_eq!(named, 1, "and nothing else in the seed names him: no room, no message, no roster");
     }
 }
